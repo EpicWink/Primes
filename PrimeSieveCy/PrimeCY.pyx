@@ -20,12 +20,13 @@ cdef void initialise_sieve(Sieve* sieve, unsigned long limit) except *:
 
     sieve.size = limit
     sieve.rawbits = <unsigned char*> mem.PyMem_Malloc(
-        limit * sizeof(unsigned char)
+        (limit // 8 + 1) * sizeof(unsigned char)
     )
     if not sieve.rawbits:
         raise MemoryError("Unable to allocate sieve")
     for i in range((limit + 1) // 2):
-        sieve.rawbits[i] = 1
+        sieve.rawbits[i] = 85  # 01010101
+    sieve.rawbits[0] |= 64  # set 2 as prime number
 
 
 cdef void finalise_sieve(Sieve* sieve):
@@ -36,7 +37,7 @@ cdef unsigned char get_bit_c(Sieve* sieve, size_t index) nogil:
     if index % 2 == 0:
         return 0
     else:
-        return sieve.rawbits[index // 2]
+        return sieve.rawbits[(index // 2) // 8] & (2 ** (7 - (index // 2) % 8))
 
 
 def get_bit(object sieve_py, size_t index):
@@ -46,12 +47,12 @@ def get_bit(object sieve_py, size_t index):
 
     sieve.size = sieve_py.size
     sieve.rawbits = <unsigned char*> mem.PyMem_Malloc(
-        sieve.size * sizeof(unsigned char)
+        (sieve.size // 8 + 1) * sizeof(unsigned char)
     )
     if not sieve.rawbits:
         raise MemoryError("Unable to allocate sieve")
     for i in range(sieve.size):
-        sieve.rawbits[i] = sieve_py.rawbits[i]
+        sieve.rawbits[i // 8] |= 2 ** (7 - i % 8) & sieve_py.rawbits[i]
     with nogil:
         result = get_bit_c(&sieve, index)
     mem.PyMem_Free(sieve.rawbits)
@@ -65,7 +66,7 @@ cdef void clear_bit(Sieve* sieve, size_t index) nogil:
         # with gil:
         #     print("Can't set even bits")
         return
-    sieve.rawbits[index // 2] = 0
+    sieve.rawbits[(index // 2) // 8] &= ~(2 ** (7 - (index // 2) % 8))
 
 
 @cython.cdivision(True)
@@ -102,6 +103,6 @@ def prime_sieve(unsigned long limit):
 
     rawbits = array.array("B", b"\x00" * limit)
     for i in range(limit):
-        rawbits[i] = sieve.rawbits[i]
+        rawbits[i] = get_bit_c(&sieve, i)
     finalise_sieve(&sieve)
     return types.SimpleNamespace(size=sieve.size, rawbits=rawbits)

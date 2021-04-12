@@ -10,7 +10,7 @@ You'll need
 
 ### Building
 ```shell
-cythonise -i PrimeCY.pyx
+cythonize -i PrimeCY.pyx
 ```
 
 ## Running
